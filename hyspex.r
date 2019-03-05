@@ -18,8 +18,9 @@ rm(indat)
 # merge datasets
 spex =
   rbind(
-    mutate(spex0822with0821, Date = 20180822),
-    mutate(spex0910with0906, Date = 20180910)
+    mutate(spex0822with0821, Date = "Aug22 w/ Aug21"),
+    mutate(spex0910with0906, Date = "Sep10 w/ Sep06"),
+    mutate(spex0910with0918, Date = "Sep10 w/ Sep18")
   )
 
 spex_comp =
@@ -50,7 +51,7 @@ p1 =
        x = "Wavelength",
        y = "Mean reflectance")
 p1
-CairoPNG("spex20180822.png", h = 500, w = 800);p1;dev.off()
+CairoPNG("spex-graphs.png", h=6, w=10, units="in", dpi=300);p1;dev.off()
 
 
 p2 =
@@ -60,7 +61,6 @@ p2 =
   geom_hline(yintercept = 0) +
   geom_ribbon(aes(ymin = 0, ymax = diff)) +
   labs(x = "Wavelength",
-       y = "Log difference in means")
+       y = "Log difference in mean reflectance")
 p2
-
-  
+CairoPNG("spex-comp.png", h=6, w=10, units="in", dpi=300);p2;dev.off()
