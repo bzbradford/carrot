@@ -2,34 +2,39 @@ library(tidyverse)
 library(openxlsx)
 library(Cairo)
 
-dat =
-  read.xlsx(file.choose()) %>%
-  gather(6:ncol(.), key = "wav", value = "ref") %>%
+# read sheet
+indat =
+  read.xlsx(file.choose(), sheet = 1) %>%
+  gather(4:ncol(.), key = "wav", value = "refl") %>%
   mutate(wav = round(as.numeric(wav),5)) %>%
-  mutate_at(c("Mask", "Density", "Plot", "AY"),~ as.factor(.))
+  mutate_at(c("PlotID", "AY"),~ as.factor(.))
 
-spex20180822 = dat
-spex20180910 = dat
+# save to correct name
+spex0822with0821 = indat
+spex0910with0906 = indat
+spex0910with0918 = indat
+rm(indat)
 
+# merge datasets
 spex =
   rbind(
-    mutate(spex20180822, Date = 20180822),
-    mutate(spex20180910, Date = 20180910)
+    mutate(spex0822with0821, Date = 20180822),
+    mutate(spex0910with0906, Date = 20180910)
   )
 
 spex_comp =
   spex %>%
   group_by(Date, AY, wav) %>%
   summarise(
-    meanref = mean(ref),
-    minref = min(ref),
-    maxref = max(ref)
+    meanref = mean(refl),
+    minref = min(refl),
+    maxref = max(refl)
   )
 
 spex_diff =
   spex %>%
   group_by(Date, AY, wav) %>%
-  summarise(meanref = mean(ref)) %>%
+  summarise(meanref = mean(refl)) %>%
   spread(AY, meanref) %>%
   mutate(diff = log(NEG) - log(POS))
 
