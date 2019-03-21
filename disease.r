@@ -1,4 +1,4 @@
-## packages ####
+#### packages ####
 
 library(tidyverse)
 library(stats)
@@ -6,21 +6,21 @@ library(spatstat)
 
 
 
-## read data ####
+#### read data ####
 carrots =
   read_csv("in/carrots.csv") %>%
   filter(AY == 1) %>%
-  mutate_if(is.character, as.factor)
+  mutate_if(is.character, as.factor) %>%
+  mutate(x = WTM_X, y = WTM_Y)
 
 stakes =
   read_csv("in/stakes.csv") %>%
   mutate_if(is.character, as.factor)
 
-ay = read_delim(clipboard(), "\t")
 
 
 
-## disease incidence stuff ####
+#### disease incidence stuff ####
 
 ay %>%
   group_by(Date, Density, PlotType) %>%
@@ -54,7 +54,7 @@ ay.cum %>%
 
 
 
-## plots ####
+#### plots ####
 
 carrots %>%
   ggplot(aes(x = WTM_X, y = WTM_Y)) +
@@ -68,25 +68,54 @@ carrots %>%
 
 
 
-## kmeans test ####
-km = kmeans(cbind(carrots$WTM_X, carrots$WTM_Y), centers = 20)
+#### kmeans test ####
 
+# carrot loc chart
+km = kmeans(cbind(carrots$WTM_X, carrots$WTM_Y), centers = 20)
 carrots %>%
   ggplot(aes(x = WTM_X, y = WTM_Y)) +
   geom_point(aes(color = as.factor(km$cluster)))
 
-ay =
-  data.frame(carrot = paste0("C",str_pad(carrots$Carrot, 3, pad = "0")),
-             x = carrots$x,
-             y = carrots$y)
 
-# pairwise distances
-ay.pairdist = pairdist(ay) # all pairwise distances
-ay.nndist = nndist(ay.pts) # distance to nearest neighbor
-ay.nnwhich = nnwhich(ay.pts)
-plot(ay.nnwhich, type = "h")
-ay.distmap = distmap(ay.pts)
-data(cells)
+
+#### clustering stuff ####
+
+ay = carrots %>%
+  ppp(x = .$x, y = .$y, xrange = range(.$x), yrange = range(.$y))
+
+
+# distmap for whole field
+ay.distmap =
+  carrots %>%
+  ppp(
+    x = .$x,
+    y = .$y,
+    xrange = range(.$x) + c(-1, 1),
+    yrange = range(.$y) + c(-1, 1)
+  ) %>%
+  do(distmap())
+png("distmaps/field.png")
+image(ay.distmap, main = "AY distmap")
+dev.off()
+
+
+# distmaps for each plot
+for (plot in levels(carrots$PlotID)) {
+  image =
+    carrots %>%
+    filter(PlotID == plot) %>%
+    ppp(x = .$x, y = .$y,
+        xrange = range(.$x) + c(-1, 1),
+        yrange = range(.$y) + c(-1, 1)) %>%
+    distmap()
+  png(paste0("distmaps/", plot, ".png"))
+  image(image, main = plot)
+  dev.off()
+}
+
+
+
+#### random pts ####
 
 for (plot in levels(carrots$PlotID)) {
   print(plot)
