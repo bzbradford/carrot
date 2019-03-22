@@ -2,8 +2,8 @@
 
 library(tidyverse)
 library(stats)
-library(spatstat)
-
+library(ggpubr)
+library(Cairo)
 
 
 #### read data ####
@@ -17,47 +17,54 @@ stakes =
   read_csv("in/stakes.csv") %>%
   mutate_if(is.character, as.factor)
 
+ay =
+  read_csv("in/incidence.csv") %>%
+  mutate_if(is.character, as.factor)
 
 
 
 #### disease incidence stuff ####
-
-ay %>%
-  group_by(Date, Density, PlotType) %>%
-  summarise(n = n(),
-            mean.inc = mean(Incidence),
-            se.inc = sd(Incidence)/sqrt(n())) %>%
-  ggplot(aes(x = Date, y = mean.inc)) +
-  geom_point() +
-  geom_line() +
-  facet_grid(Density ~ PlotType)
-
-ay.cum =
+# mean AY incidence by density and plot location
+ay.summary =
   ay %>%
-  arrange(Date) %>%
-  group_by(PlotID) %>%
-  mutate(cumAY = cumsum(AYPos),
-         cumInc = cumAY / Stand) %>%
-  ungroup()
-
-ay.cum %>%
-  group_by(Density, PlotType, Date) %>%
+  group_by(Date, Density, Location) %>%
   summarise(n = n(),
-            meanInc = mean(cumInc),
-            seInc = sd(cumInc)/sqrt(n())) %>%
-  ggplot(aes(x = Date, y = meanInc)) +
-  geom_hline(yintercept = 0) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = meanInc - seInc, ymax = meanInc + seInc), width = .1) +
-  facet_grid(Density ~ PlotType)
+            mean = mean(Incidence),
+            sd = sd(Incidence),
+            se = sd(Incidence)/sqrt(n()))
 
+ay.barplot =
+  ay.summary %>%
+  ggplot(aes(x = Date, y = mean, ymin = mean-se, ymax = mean+se, fill = Location)) +
+  geom_hline(yintercept = 0) +
+  geom_bar(stat = "identity", color = "black", width = 10, position = "dodge") +
+  geom_linerange(position = position_dodge(10)) +
+  facet_grid(. ~ Density) +
+  labs(y = "Mean AY incidence", x = "") +
+  theme_pubr()
+
+ay.lineplot =
+  ay.summary %>%
+  ggplot(aes(x = Date,
+             y = mean,
+             ymin = mean-se,
+             ymax = mean+se,
+             group = paste(Density, Location))) +
+  geom_line(aes(linetype = Density), size = .5) +
+  geom_point(aes(shape = Location), size = 2.5) +
+  geom_errorbar(width = 3, size = .25) +
+  scale_shape_discrete() +
+  scale_color_manual(values = c("black", "darkgrey")) +
+  labs(y = "Mean AY incidence per plot", x = "Sampling date") +
+  theme_classic2()
+tiff("out/incidence.tif", type="cairo", w=5, h=3, u="in", res=300)
+ay.lineplot
+dev.off()
 
 
 #### plots ####
-
 carrots %>%
-  ggplot(aes(x = WTM_X, y = WTM_Y)) +
+  ggplot(aes(x = x, y = y)) +
   geom_point(aes(color = as.factor(AY)))
 
 
@@ -69,6 +76,7 @@ carrots %>%
 
 
 #### kmeans test ####
+library(stats)
 
 # carrot loc chart
 km = kmeans(cbind(carrots$WTM_X, carrots$WTM_Y), centers = 20)
@@ -79,27 +87,27 @@ carrots %>%
 
 
 #### clustering stuff ####
+library(spatstat)
 
-ay = carrots %>%
-  ppp(x = .$x, y = .$y, xrange = range(.$x), yrange = range(.$y))
+# define WTM coordinate extents for carrot field
+fieldExtent =
+  data.frame(x = c(556040, 556107),
+             y = c(405070, 405119))
 
+# create ppp object from carrot locations and field extent
+carrot.ppp = carrots %>%
+  ppp(x = .$x,
+      y = .$y,
+      xrange = fieldExtent$x,
+      yrange = fieldExtent$y)
 
-# distmap for whole field
-ay.distmap =
-  carrots %>%
-  ppp(
-    x = .$x,
-    y = .$y,
-    xrange = range(.$x) + c(-1, 1),
-    yrange = range(.$y) + c(-1, 1)
-  ) %>%
-  do(distmap())
+# generate distmap for whole field
+carrot.distmap = distmap(carrot.ppp)
 png("distmaps/field.png")
 image(ay.distmap, main = "AY distmap")
 dev.off()
 
-
-# distmaps for each plot
+# generate distmaps for each plot
 for (plot in levels(carrots$PlotID)) {
   image =
     carrots %>%
