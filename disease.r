@@ -6,7 +6,9 @@ library(spatstat)
 library(Cairo)
 
 
-#### read data ####
+
+#### Carrot location plots ####
+
 carrots =
   read_csv("in/carrot locs wtm.csv") %>%
   filter(AY == 1) %>%
@@ -17,13 +19,27 @@ stakes =
   read_csv("in/stakes.csv") %>%
   mutate_if(is.character, as.factor)
 
+ay.pts =
+  carrots %>%
+  mutate(x = WTM_X - min(WTM_X),
+         y = WTM_Y - min(WTM_Y)) %>%
+  ggplot(aes(x = x, y = y, color = Density)) +
+  geom_point() +
+  labs(title = "AY+ Carrot Locations",
+       x = "Meters",
+       y = "Meters")
+ay.pts
+ggsave("ay pts.png", ay.pts)
+
+
+
+#### disease incidence plots ####
+
+# read AY incidence data
 ay =
   read_csv("in/incidence.csv") %>%
   mutate_if(is.character, as.factor)
 
-
-
-#### disease incidence stuff ####
 # mean AY incidence by density and plot location
 ay.summary =
   ay %>%
@@ -33,6 +49,7 @@ ay.summary =
             sd = sd(Incidence),
             se = sd(Incidence)/sqrt(n()))
 
+# bar plot of incidence over time by groups
 ay.barplot =
   ay.summary %>%
   ggplot(aes(x = Date, y = mean, ymin = mean-se, ymax = mean+se, fill = Location)) +
@@ -40,9 +57,11 @@ ay.barplot =
   geom_bar(stat = "identity", color = "black", width = 10, position = "dodge") +
   geom_linerange(position = position_dodge(10)) +
   facet_grid(. ~ Density) +
-  labs(y = "Mean AY incidence", x = "") +
-  theme_pubr()
+  labs(y = "Mean AY incidence", x = "")
+ay.barplot
+ggsave("ay barplot.png", ay.barplot)
 
+# disease incidence over time, line plot
 ay.lineplot =
   ay.summary %>%
   ggplot(aes(x = Date,
@@ -55,24 +74,9 @@ ay.lineplot =
   geom_errorbar(width = 3, size = .25) +
   scale_shape_discrete() +
   scale_color_manual(values = c("black", "darkgrey")) +
-  labs(y = "Mean AY incidence per plot", x = "Sampling date") +
-  theme_classic2()
-tiff("out/incidence.tif", type="cairo", w=5, h=3, u="in", res=300)
+  labs(y = "Mean AY incidence per plot", x = "Sampling date")
 ay.lineplot
-dev.off()
-
-
-
-#### plots ####
-carrots %>%
-  ggplot(aes(x = x, y = y)) +
-  geom_point(aes(color = as.factor(AY)))
-
-
-carrots %>%
-  ggplot(aes(x = WTM_X, y = WTM_Y)) +
-  geom_point(data = stakes) +
-  geom_point(aes(color = PlotID))
+ggsave("ay lineplot.png", ay.lineplot)
 
 
 
@@ -87,7 +91,6 @@ carrots %>%
 
 
 #### clustering stuff ####
-library(spatstat)
 
 # define WTM coordinate extents for carrot field
 fieldExtent =
@@ -126,7 +129,6 @@ envelope(carrot.ppp, Kest, nsim = 39)
 
 
 
-
 #### random pts ####
 
 clust_in =
@@ -143,7 +145,7 @@ clust =
   mutate(Loc = NewLocDecFt) %>%
   select(c(Density, PlotID, Row, Loc))
 
-
+# generate a number of random carrots matching number of AY carrots
 genpts =
   function(df, ...) {
     groups = enquos(...)
@@ -156,8 +158,9 @@ genpts =
       ))
   }
 
+# same as above but returns a ppp object. Also doesn't take grouping vars
 genptsppp =
-  function(df, ...) {
+  function(df) {
     df %>%
       do(data.frame(
         Row = sample(1:3, nrow(.), replace = T),
@@ -174,6 +177,8 @@ genpts(clust, PlotID)
 genptsppp(clust)
 
 
+
+# generate random pts by plot
 clust %>%
   group_by(PlotID) %>%
   do(genpts(.))
@@ -186,16 +191,12 @@ rand_pts %>%
   facet_wrap(~PlotID)
 
 
-clust %>%
-  filter(PlotID == "H-102") %>%
-  ppp(x = .$Row, y = .$Loc, xrange = c(1, 3), yrange = c(0, 22)) %>%
-  envelope(., Kest, nsims = 10)
-
 
 clust %>%
   group_by(PlotID) %>%
   ppp(x = .$Row, y = .$Loc, xrange = c(1, 3), yrange = c(0, 22)) %>%
   envelope(., Kest, nsims = 10)
+
 
 clust.ppp =
   clust %>%
