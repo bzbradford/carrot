@@ -2,13 +2,13 @@
 
 library(tidyverse)
 library(stats)
-library(ggpubr)
+library(spatstat)
 library(Cairo)
 
 
 #### read data ####
 carrots =
-  read_csv("in/carrots.csv") %>%
+  read_csv("in/carrot locs wtm.csv") %>%
   filter(AY == 1) %>%
   mutate_if(is.character, as.factor) %>%
   mutate(x = WTM_X, y = WTM_Y)
@@ -62,6 +62,7 @@ ay.lineplot
 dev.off()
 
 
+
 #### plots ####
 carrots %>%
   ggplot(aes(x = x, y = y)) +
@@ -76,7 +77,6 @@ carrots %>%
 
 
 #### kmeans test ####
-library(stats)
 
 # carrot loc chart
 km = kmeans(cbind(carrots$WTM_X, carrots$WTM_Y), centers = 20)
@@ -121,112 +121,90 @@ for (plot in levels(carrots$PlotID)) {
   dev.off()
 }
 
+# monte carlo sims
+envelope(carrot.ppp, Kest, nsim = 39)
+
+
 
 
 #### random pts ####
 
-for (plot in levels(carrots$PlotID)) {
-  print(plot)
-}
+clust_in =
+  read.csv("in/carrot rel locs.csv") %>%
+  mutate_if(is.character, as.factor) %>%
+  filter(AY == 1)
 
-ncarrots =
-  carrots %>%
-  group_by(PlotID) %>%
-  summarise(n = n())
+clust_in %>%
+  ggplot(aes(x = Row, y = NewLocDecFt)) +
+  geom_point()
+  
+clust =
+  clust_in %>%
+  mutate(Loc = NewLocDecFt) %>%
+  select(c(Density, PlotID, Row, Loc))
 
-generatePoints =
-  function(fstake = c(0, 0), bstake = c(0, 0), n = 0) {
-    require(stats)
-    if (n == 0) {
-      return()
-    }
-    else {
-      cbind(
-        runif(n, fstake[1], fstake[2]),
-        runif(n, bstake[1], bstake[2])
-      )
-# 
-#       xdif = BX - FX
-#       xinc = xdif / n
-#       ydif = BY - FY
-#       yinc = ydif / n
-#       
-      # data.frame(
-      #   X = seq(
-      #     from = FX + xinc / 2,
-      #     to = BX - xinc / 2,
-      #     by = xinc
-      #   ),
-      #   Y = seq(
-      #     from = FY + yinc / 2,
-      #     to = BY - yinc / 2,
-      #     by = yinc
-      #   )
-      # )
-    }
+
+genpts =
+  function(df, ...) {
+    groups = enquos(...)
+    df %>%
+      group_by(!!!groups) %>%
+      do(data.frame(
+        Row = sample(1:3, nrow(.), replace = T),
+        Loc = runif(nrow(.), 0, 22),
+        n = nrow(.)
+      ))
   }
 
-# need to figure out how to pass a list of variables (maybe)
-stakes %>%
-  group_by(RowID) %>%
-  do(generatePoints(.$FX, .$FY, .$BX, .$BY, .$n))
+genptsppp =
+  function(df, ...) {
+    df %>%
+      do(data.frame(
+        Row = sample(1:3, nrow(.), replace = T),
+        Loc = runif(nrow(.), 0, 22),
+        n = nrow(.)
+      )) %>%
+      ppp(x = .$Row,
+          y = .$Loc,
+          xrange = c(1, 3),
+          yrange = c(0, 22))
+  }
+
+genpts(clust, PlotID)
+genptsppp(clust)
 
 
-test <- stakes %>%
-  unite(merge, FX, FY, BX, BY, sep = ",")
-  
-stakes %>%
-  left_join(ncarrots) %>%
-  group_by(PlotID, RowID) %>%
-  do(data.frame(count = 0:.$n, pos = c(.$FX, .$FY)))
-
-stakes %>%
-  left_join(ncarrots) %>%
-  group_by(PlotID, RowID) %>%
-  do(generatePoints(.$FX,.$FY,.$BX,.$BY,.$n))
-
-test.f = c(556043.2876, 405117.6877)
-test.b = c(556043.1761, 405111.2948)
-generatePoints(testf, testb, 15)
+clust %>%
+  group_by(PlotID) %>%
+  do(genpts(.))
 
 
-n = 15
-testpts =
-  data.frame(
-    x = runif(n, min(test.f), max(test.f)),
-    y = runif(n, min(test.b), max(test.b)))
-testpts
+# look at random pts
+rand_pts %>%
+  ggplot(aes(x = as.factor(Row), y = Loc, color = Density)) +
+  geom_point() +
+  facet_wrap(~PlotID)
 
 
-library(spatstat)
-
-rpoint(15, f = 1, win = matrix(testpts, nrow = 2))
-
-
-# stakes %>%
-#   left_join(ncarrots) %>%
-#   mutate(WTM = paste(WTM_X, WTM_Y, sep = ","),
-#          WTM_X = NULL, WTM_Y = NULL, StakeID = NULL) %>%
-#   spread(key = Stake, value = WTM)
+clust %>%
+  filter(PlotID == "H-102") %>%
+  ppp(x = .$Row, y = .$Loc, xrange = c(1, 3), yrange = c(0, 22)) %>%
+  envelope(., Kest, nsims = 10)
 
 
-# test = stakes %>%
-#   left_join(ncarrots) %>%
-#   unite(WTM, WTM_X, WTM_Y) %>%
-#   mutate(WTM_X = NULL,
-#          WTM_Y = NULL,
-#          StakeID = NULL) %>%
-#   spread(key = Stake, value = WTM) %>%
-#   unite(WTM, F, B) %>%
-#   mutate(WTM = strsplit(WTM, "_", fixed = T))
+clust %>%
+  group_by(PlotID) %>%
+  ppp(x = .$Row, y = .$Loc, xrange = c(1, 3), yrange = c(0, 22)) %>%
+  envelope(., Kest, nsims = 10)
 
+clust.ppp =
+  clust %>%
+  ppp(x = .$Row,
+      y = .$Loc,
+      xrange = c(1, 3),
+      yrange = c(0, 22))
 
+clust.kenv = envelope(clust.ppp, Kest, nsims = 100)
 
-
-
-# continue this idea, join Stake and point columns to generate variable names, then spread
-# test = stakes %>%
-#   left_join(ncarrots) %>%
-#   gather(WTM_X, WTM_Y, key = "point", value = "value") %>%
-#   mutate(point = str_replace(point, "WTM_", ""))
-# test
+plot(clust.kenv)
+plot(clust.ppp)
