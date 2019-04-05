@@ -111,7 +111,7 @@ clust %>%
 
 
 
-####
+#### define function ####
 
 genptsppp =
   function(ppp) {
@@ -123,8 +123,9 @@ genptsppp =
     return(ppp)
   }
 
-nsims = 1
-sim = NULL
+
+#### deprecated ####
+nsims = 99
 for (p in levels(clust$PlotID)) {
   print(p)
   testplot =
@@ -136,25 +137,31 @@ for (p in levels(clust$PlotID)) {
       xrange = c(1, 3),
       yrange = c(0, 22)
     )
+  actual.env = envelope(testplot, Kest, verbose = F)
   for (s in 1:nsims) {
     randppp = genptsppp(testplot)
-    env = envelope(randppp, Kest)
+    sim.env = envelope(randppp, Kest, verbose = F)
     if (s == 1) {
-      obs = NULL
+      sim.obs = NULL
     }
-    obs = cbind(obs, env$obs)
+    sim.obs = cbind(obs, sim.env$obs)
+  }
+  if (p == levels(clust$PlotID)[1]) {
+    sim = NULL
   }
   sim =
     rbind(sim,
           data.frame(
             plot = p,
             r = env$r,
-            obs = envelope(testppp, Kest)$obs,
-            min = apply(obs, 1, min),
-            max = apply(obs, 1, max)
+            obs = actual.env$obs,
+            min = apply(sim.obs, 1, min),
+            max = apply(sim.obs, 1, max)
           ))
 }
 
+plot(actual.env)
+str(actual.env)
 
 sim %>%
   ggplot(aes(x = r,
@@ -166,3 +173,86 @@ sim %>%
   facet_wrap(~plot)
 
 
+
+#### Best code right now ####
+nsims = 1000
+for (p in levels(clust$PlotID)) {
+  testplot =
+    clust %>%
+    filter(PlotID == p) %>%
+    ppp(
+      x = .$Row,
+      y = .$Loc,
+      xrange = c(1, 3),
+      yrange = c(0, 22)
+    )
+  print(paste0("Running ",
+               nsims,
+               " sims of ",
+               p,
+               " (n = ",
+               testplot$n,
+               ")"))
+  env =
+    envelope(testplot,
+             Kest,
+             verbose = F,
+             nsim = nsims,
+             simulate = expression(genptsppp(testplot)))
+  if (p == levels(clust$PlotID)[1]) {
+    sim = NULL
+  }
+  sim =
+    rbind(sim,
+          data.frame(
+            plot = p,
+            r = env$r,
+            obs = env$obs,
+            min = env$lo,
+            max = env$hi
+          ))
+}
+
+# plot k-function simulations
+sim %>%
+  ggplot(aes(x = r,
+             y = obs,
+             ymin = min,
+             ymax = max)) +
+  geom_ribbon(alpha = .5) +
+  geom_line(color = "red") +
+  facet_wrap(~plot) +
+  scale_y_sqrt()
+
+# plot all carrot locs
+clust %>%
+  ggplot(aes(x = Row,
+             y = Loc)) +
+  geom_point() +
+  facet_wrap(~PlotID)
+
+
+
+# whats up with H-306 and L-305
+testplot =
+  clust %>%
+  filter(PlotID == "H-306") %>%
+  ppp(x = .$Row,
+      y = .$Loc,
+      xrange = c(1,3),
+      yrange = c(0,22))
+
+testenv = envelope(testplot, Kest, simulate = expression(genptsppp(testplot)))
+envelope(testplot, Kest)
+testenv = envelope(genptsppp(testplot), Kest)
+
+plot(testplot)
+plot(genptsppp(testplot))
+plot(testenv)
+view(testplot)
+
+testk = Kest(testplot)
+plot(testk)
+
+testplot$x
+testplot$y = testplot$y*2
