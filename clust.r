@@ -150,3 +150,53 @@ sim %>%
   geom_line(color = "red")
 
 
+
+
+### full loop
+for (p in levels(clust$PlotID)) {
+  print(p)
+  testplot =
+    clust %>%
+    filter(PlotID == p)
+  testppp =
+    testplot %>%
+    ppp(
+      x = .$Row,
+      y = .$Loc,
+      xrange = c(1, 3),
+      yrange = c(0, 22)
+    )
+  
+  for (s in 1:20) {
+    randppp = genptsppp(testplot)
+    env = envelope(randppp, Kest)
+    if (s == 1) {
+      obs = NULL
+    }
+    obs = cbind(obs, env$obs)
+  }
+  sim =
+    data.frame(
+      r = env$r,
+      obs = envelope(testppp, Kest)$obs,
+      min = apply(obs, 1, min),
+      max = apply(obs, 1, max)
+    )
+}
+
+
+
+
+
+genptsppp2 =
+  function(ppp) {
+    require(spatstat)
+    xrange = ppp$window$xrange
+    yrange = ppp$window$yrange
+    ppp$x = sample(xrange[1]:xrange[2], ppp$n, replace = T)
+    ppp$y = runif(ppp$n, yrange[1], yrange[2])
+    return(ppp)
+  }
+
+plot(testppp)
+plot(genptsppp2(testppp))
