@@ -4,7 +4,7 @@ library(spatstat)
 
 # load and prep data ----
 clust_in =
-  read.csv("in/carrot rel locs.csv") %>%
+  read.csv("in/carrot_locs.csv") %>%
   mutate_if(is.character, as.factor) %>%
   filter(AY == 1)
 
@@ -15,7 +15,7 @@ clust_in %>%
 clust =
   clust_in %>%
   mutate(Loc = NewLocDecFt) %>%
-  select(c(Density, PlotID, Row, Loc))
+  select(c(Course, Density, Bed, PlotID, Row, Loc))
 
 
 # random carrot generation (non-ppp) ----
@@ -51,7 +51,7 @@ makeppp = function(df) {
     df,
     x = df$Row,
     y = df$Loc,
-    xrange = c(1, 3),
+    xrange = c(0, 4),
     yrange = c(0, 22)
   )
 }
@@ -60,10 +60,19 @@ genptsppp = function(ppp) {
   require(spatstat)
   xrange = ppp$window$xrange
   yrange = ppp$window$yrange
-  ppp$x = sample(xrange[1]:xrange[2], ppp$n, replace = T)
-  ppp$y = runif(ppp$n, yrange[1], yrange[2])
+  ppp$x = sample(1:3, ppp$n, replace = T)
+  ppp$y = runif(ppp$n, 0, 22)
   return(ppp)
 }
+
+# genptsppp = function(ppp) {
+#   require(spatstat)
+#   xrange = ppp$window$xrange
+#   yrange = ppp$window$yrange
+#   ppp$x = sample(xrange[1]:xrange[2], ppp$n, replace = T)
+#   ppp$y = runif(ppp$n, yrange[1], yrange[2])
+#   return(ppp)
+# }
 
 
 #### deprecated ####
@@ -127,7 +136,7 @@ for (p in levels(clust$PlotID)) {
     ppp(
       x = .$Row,
       y = .$Loc,
-      xrange = c(1, 3),
+      xrange = c(0, 4),
       yrange = c(0, 22)
     )
   print(paste0("Running ",
@@ -157,8 +166,9 @@ for (p in levels(clust$PlotID)) {
           ))
 }
 
-# plot k-function simulations
-sim %>%
+# plot k-function simulations ----
+p.sims =
+  sim %>%
   ggplot(aes(x = r,
              y = obs,
              ymin = min,
@@ -167,46 +177,31 @@ sim %>%
   geom_line(color = "red") +
   facet_wrap(~plot) +
   scale_y_sqrt()
+p.sims
+ggsave("out/all sims.png", p.sims)
 
 # plot all carrot locs
-clust %>%
+p.carrotLocs =
+  clust %>%
   ggplot(aes(x = Row,
              y = Loc)) +
   geom_point() +
-  facet_wrap(~PlotID)
+  scale_x_continuous(limits = c(0.5, 3.5)) +
+  facet_wrap( ~ PlotID, nrow = 2) +
+  theme_bw()
+p.carrotLocs
+ggsave("out/carrot locs.png", p.carrotLocs)
 
 
 
-# whats up with H-306 and L-305 ----
-test = "H-306"
-test = "L-305"
+# Generate distmaps ----
 
-testplot =
-  clust %>%
-  filter(PlotID == levels(PlotID)[2]) %>%
-  makeppp()
-
-clust %>%
-  group_by(Density, PlotID, Row) %>%
-  summarise(n = n())
-
-testenv = envelope(testplot,
-                   Kest,
-                   simulate = expression(genptsppp(testplot)),
-                   nsim = 1000)
-testenv
-
-plot(testplot)
-plot(testenv)
-
-# visualize pairwise distances
-testpair = pairdist(testplot)
-image(testpair)
-image(testplot)
-
-
-testk = Kest(testplot)
-plot(testk)
-
-testplot$x
-testplot$y = testplot$y*2
+# set multi plot margins
+par(mfrow = c(2, 10),
+    mar = c(1, 1, 2, 1))
+for (plot in levels(clust$PlotID)) {
+  pts = filter(clust, PlotID == plot) %>% makeppp()
+  image = distmap(pts)
+  image(image, main = plot, ribbon = FALSE)
+  plot(pts, add = TRUE, col = 'red', pch = 20)
+}
