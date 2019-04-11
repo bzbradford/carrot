@@ -114,7 +114,7 @@ carrot.ppp =
 # generate distmap for whole field
 carrot.distmap = distmap(carrot.ppp)
 png("distmaps/field.png")
-image(ay.distmap, main = "AY distmap")
+plot(ay.distmap, main = "AY distmap", ribbon = FALSE)
 dev.off()
 
 # generate distmaps for each plot
@@ -130,3 +130,4 @@ for (plot in levels(carrots$PlotID)) {
   image(image, main = plot)
   dev.off()
 }
+
