@@ -2,7 +2,7 @@ library(tidyverse)
 library(spatstat)
 
 
-#### load and prep data ####
+# load and prep data ----
 clust_in =
   read.csv("in/carrot rel locs.csv") %>%
   mutate_if(is.character, as.factor) %>%
@@ -18,7 +18,7 @@ clust =
   select(c(Density, PlotID, Row, Loc))
 
 
-#### random carrot generation (non-ppp) ####
+# random carrot generation (non-ppp) ----
 # generate a number of random carrots matching number of AY carrots
 genpts =
   function(df, ...) {
@@ -43,85 +43,27 @@ rand_pts %>%
   facet_wrap(~PlotID)
 
 
-#### random carrot generation (ppp) ####
-# same as above but returns a ppp object. Also doesn't take grouping vars
-genptsppp =
-  function(df,
-           xmin = 1,
-           xmax = 3,
-           ymin = 0,
-           ymax = 22) {
-    df %>%
-      do(data.frame(
-        Row = sample(xmin:xmax, nrow(.), replace = T),
-        Loc = runif(nrow(.), ymin, ymax),
-        n = nrow(.)
-      )) %>%
-      ppp(x = .$Row,
-          y = .$Loc,
-          xrange = c(xmin, xmax),
-          yrange = c(ymin, ymax))
-  }
 
-randpts = genptsppp(clust)
+# random carrot generation (ppp) ----
 
+makeppp = function(df) {
+  ppp(
+    df,
+    x = df$Row,
+    y = df$Loc,
+    xrange = c(1, 3),
+    yrange = c(0, 22)
+  )
+}
 
-# clustering for whole field (don't use)
-clust.ppp =
-  clust %>%
-  ppp(x = .$Row,
-      y = .$Loc,
-      xrange = c(1, 3),
-      yrange = c(0, 22))
-
-clust.kenv = envelope(clust.ppp, Kest, nsims = 100)
-
-plot(clust.kenv)
-plot(clust.ppp)
-
-
-
-set.seed(422)
-
-rand1 =
-  clust %>%
-  filter(PlotID == "H-115") %>%
-  genptsppp()
-rand2 =
-  clust %>%
-  filter(PlotID == "H-115") %>%
-  genptsppp()
-
-plot(rand1)
-plot(rand2)
-
-rand_env1 = envelope(rand1, Gest)
-rand_env2 = envelope(rand2, Gest)
-
-plot(rand_env1$r ~ rand_env1$obs, type = "s")
-plot(rand_env2$r ~ rand_env2$obs, type = "s")
-
-
-levels(clust$PlotID)
-
-clust %>%
-  filter(PlotID == "H-102") %>%
-  genptsppp() %>%
-  plot()
-
-
-
-#### define function ####
-
-genptsppp =
-  function(ppp) {
-    require(spatstat)
-    xrange = ppp$window$xrange
-    yrange = ppp$window$yrange
-    ppp$x = sample(xrange[1]:xrange[2], ppp$n, replace = T)
-    ppp$y = runif(ppp$n, yrange[1], yrange[2])
-    return(ppp)
-  }
+genptsppp = function(ppp) {
+  require(spatstat)
+  xrange = ppp$window$xrange
+  yrange = ppp$window$yrange
+  ppp$x = sample(xrange[1]:xrange[2], ppp$n, replace = T)
+  ppp$y = runif(ppp$n, yrange[1], yrange[2])
+  return(ppp)
+}
 
 
 #### deprecated ####
@@ -174,8 +116,10 @@ sim %>%
 
 
 
-#### Best code right now ####
+# Simulate by plot ----
+
 nsims = 1000
+
 for (p in levels(clust$PlotID)) {
   testplot =
     clust %>%
@@ -233,23 +177,33 @@ clust %>%
 
 
 
-# whats up with H-306 and L-305
+# whats up with H-306 and L-305 ----
+test = "H-306"
+test = "L-305"
+
 testplot =
   clust %>%
-  filter(PlotID == "H-306") %>%
-  ppp(x = .$Row,
-      y = .$Loc,
-      xrange = c(1,3),
-      yrange = c(0,22))
+  filter(PlotID == levels(PlotID)[2]) %>%
+  makeppp()
 
-testenv = envelope(testplot, Kest, simulate = expression(genptsppp(testplot)))
-envelope(testplot, Kest)
-testenv = envelope(genptsppp(testplot), Kest)
+clust %>%
+  group_by(Density, PlotID, Row) %>%
+  summarise(n = n())
+
+testenv = envelope(testplot,
+                   Kest,
+                   simulate = expression(genptsppp(testplot)),
+                   nsim = 1000)
+testenv
 
 plot(testplot)
-plot(genptsppp(testplot))
 plot(testenv)
-view(testplot)
+
+# visualize pairwise distances
+testpair = pairdist(testplot)
+image(testpair)
+image(testplot)
+
 
 testk = Kest(testplot)
 plot(testk)
