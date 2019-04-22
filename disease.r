@@ -5,19 +5,19 @@ library(Cairo)
 
 # read diseased carrot locations
 carrots =
-  read_csv("in/carrot locs wtm.csv") %>%
+  read_csv("data/carrot locs wtm.csv") %>%
   filter(AY == 1) %>%
   mutate_if(is.character, as.factor) %>%
   mutate(x = WTM_X, y = WTM_Y)
 
 # front and back stake locations
 stakes =
-  read_csv("in/stakes.csv") %>%
+  read_csv("data/stakes.csv") %>%
   mutate_if(is.character, as.factor)
 
 # read AY incidence data
 ay =
-  read_csv("in/incidence.csv") %>%
+  read_csv("data/incidence.csv") %>%
   mutate_if(is.character, as.factor)
 
 
@@ -88,7 +88,7 @@ ggsave("ay lineplot.png", ay.lineplot)
 
 # subgroups ----
 
-subgroups = read_csv("in/subgroups.csv") %>%
+subgroups = read_csv("data/subgroups.csv") %>%
   mutate_if(is.character, as.factor)
 str(subgroups)
 
@@ -118,7 +118,7 @@ grid.arrange(p + geom_area() +
 
 # effectors ----
 
-effectors = read_csv("in/effectors.csv")
+effectors = read_csv("data/effectors.csv")
 
 # gather SAPs
 eff_long = effectors %>%
