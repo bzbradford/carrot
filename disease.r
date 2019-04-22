@@ -102,6 +102,7 @@ subgroup_count = subgroups %>%
   arrange(Subgroup) %>%
   group_by(Subgroup) %>%
   mutate(cumn = cumsum(n))
+subgroup_count
 
 library(gridExtra)
 p = subgroup_count %>%
@@ -138,22 +139,34 @@ eff_long %>%
        y = "Number of copies per R16 read",
        x = "Collection date")
 
+eff_long %>% left_join(subgroup_count)
+
+
 
 # bar plot by date
-eff_long %>%
+p = eff_long %>%
+  filter(Subgroup != "1A1B") %>%
   group_by(Date, Subgroup, Effector) %>%
   summarise(CopyNumber.mean = mean(CopyNumber),
             CopyNumber.sd = sd(CopyNumber)) %>%
-  ggplot(aes(x = Date,
+  ggplot(aes(x = factor(Date,
+                        labels = unique(format(Date, "%b %d")),
+                        ordered = T),
              y = CopyNumber.mean,
-             fill = Subgroup,
-             group = Date)) +
-  geom_bar(stat = "identity", position = "stack") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+             fill = Subgroup)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p + geom_col(position = "stack") +
   facet_wrap(~Effector, scales = "free_y") +
   labs(title = "Effector abundance by subgroup",
-       y = "Number of copies per R16 read",
-       x = "Collection date")
+       x = "Collection date",
+       y = "Number of copies per R16 read")
+p + geom_col(position = "fill") +
+  facet_wrap(~Effector) +
+  labs(title = "Effector balance by subgroup",
+       x = "Collection date",
+       y = "Ratio of 1A:1B copy number")
+
+
 
 eff_long %>%
   group_by(Date, Subgroup, Effector) %>%
@@ -165,10 +178,6 @@ eff_long %>%
   geom_area() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   facet_wrap(~Effector, scales = "free_y")
-
-
-
-
 
 
 # generate log copy number transformations
