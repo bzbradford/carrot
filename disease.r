@@ -86,48 +86,91 @@ ggsave("ay lineplot.png", ay.lineplot)
 
 
 
-#### kmeans grouping ####
+# subgroups ----
 
-# carrot loc chart
-km = kmeans(cbind(carrots$WTM_X, carrots$WTM_Y), centers = 20)
-carrots %>%
-  ggplot(aes(x = WTM_X, y = WTM_Y)) +
-  geom_point(aes(color = as.factor(km$cluster)))
+subgroups = read_csv("in/subgroups.csv") %>%
+  mutate_if(is.character, as.factor)
+str(subgroups)
+
+# cumulative subgroups over time
+subgroup_count = subgroups %>%
+  group_by(Date, Subgroup) %>%
+  summarise(n = n()) %>%
+  spread(Subgroup, n, fill = 0) %>%
+  gather(Subgroup, n, `1A`:`1B`) %>%
+  ungroup() %>%
+  arrange(Subgroup) %>%
+  group_by(Subgroup) %>%
+  mutate(cumn = cumsum(n))
+
+library(gridExtra)
+p = subgroup_count %>%
+  ggplot(aes(x = Date, y = cumn, fill = Subgroup)) +
+  coord_cartesian(expand = F)
+grid.arrange(p + geom_area() +
+               labs(title = "Total AY+ carrots by subgroup",
+                    y = "Number of samples"),
+             p + geom_area(position = "fill") +
+               labs(y = "Proportion"))
 
 
 
-#### distmap images ####
+# effectors ----
 
-# define WTM coordinate extents for carrot field
-fieldExtent =
-  data.frame(x = c(556040, 556107),
-             y = c(405070, 405119))
+effectors = read_csv("in/effectors.csv")
 
-# create ppp object from carrot locations and field extent
-carrot.ppp =
-  carrots %>%
-  ppp(x = .$x,
-      y = .$y,
-      xrange = fieldExtent$x,
-      yrange = fieldExtent$y)
+# gather SAPs
+eff_long = effectors %>%
+  gather(Effector, Reads, SAP05:SAP68) %>%
+  mutate(CopyNumber = Reads / R16)
 
-# generate distmap for whole field
-carrot.distmap = distmap(carrot.ppp)
-png("distmaps/field.png")
-plot(ay.distmap, main = "AY distmap", ribbon = FALSE)
-dev.off()
+# bar plot overall
+eff_long %>%
+  group_by(Subgroup, Effector) %>%
+  summarise(CopyNumber.mean = mean(CopyNumber),
+            CopyNumber.sd = sd(CopyNumber)) %>%
+  ggplot(aes(x = Effector,
+             y = CopyNumber.mean,
+             fill = Subgroup)) +
+  geom_bar(stat = "identity", position = "stack") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Effector abundance by subgroup",
+       y = "Number of copies per R16 read",
+       x = "Collection date")
 
-# generate distmaps for each plot
-for (plot in levels(carrots$PlotID)) {
-  image =
-    carrots %>%
-    filter(PlotID == plot) %>%
-    ppp(x = .$x, y = .$y,
-        xrange = range(.$x) + c(-1, 1),
-        yrange = range(.$y) + c(-1, 1)) %>%
-    distmap()
-  png(paste0("distmaps/", plot, ".png"))
-  image(image, main = plot)
-  dev.off()
-}
 
+# bar plot by date
+eff_long %>%
+  group_by(Date, Subgroup, Effector) %>%
+  summarise(CopyNumber.mean = mean(CopyNumber),
+            CopyNumber.sd = sd(CopyNumber)) %>%
+  ggplot(aes(x = Date,
+             y = CopyNumber.mean,
+             fill = Subgroup,
+             group = Date)) +
+  geom_bar(stat = "identity", position = "stack") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~Effector, scales = "free_y") +
+  labs(title = "Effector abundance by subgroup",
+       y = "Number of copies per R16 read",
+       x = "Collection date")
+
+eff_long %>%
+  group_by(Date, Subgroup, Effector) %>%
+  summarise(CopyNumber.mean = mean(CopyNumber),
+            CopyNumber.sd = sd(CopyNumber)) %>%
+  ggplot(aes(x = Date,
+             y = CopyNumber.mean,
+             fill = Subgroup)) +
+  geom_area() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~Effector, scales = "free_y")
+
+
+
+
+
+
+# generate log copy number transformations
+# Logit analysis/chi2 tests and save results
+# produce summary table
