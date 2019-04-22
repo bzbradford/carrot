@@ -194,7 +194,7 @@ ggsave("out/carrot locs.png", p.carrotLocs)
 
 
 
-# Generate distmaps ----
+# Distmaps (new way) ----
 
 # set multi plot margins
 par(mfrow = c(2, 10),
@@ -205,3 +205,41 @@ for (plot in levels(clust$PlotID)) {
   image(image, main = plot, ribbon = FALSE)
   plot(pts, add = TRUE, col = 'red', pch = 20)
 }
+
+
+
+# distmaps (old way) ----
+
+# define WTM coordinate extents for carrot field
+fieldExtent =
+  data.frame(x = c(556040, 556107),
+             y = c(405070, 405119))
+
+# create ppp object from carrot locations and field extent
+carrot.ppp =
+  carrots %>%
+  ppp(x = .$x,
+      y = .$y,
+      xrange = fieldExtent$x,
+      yrange = fieldExtent$y)
+
+# generate distmap for whole field
+carrot.distmap = distmap(carrot.ppp)
+png("distmaps/field.png")
+plot(ay.distmap, main = "AY distmap", ribbon = FALSE)
+dev.off()
+
+# generate distmaps for each plot
+for (plot in levels(carrots$PlotID)) {
+  image =
+    carrots %>%
+    filter(PlotID == plot) %>%
+    ppp(x = .$x, y = .$y,
+        xrange = range(.$x) + c(-1, 1),
+        yrange = range(.$y) + c(-1, 1)) %>%
+    distmap()
+  png(paste0("distmaps/", plot, ".png"))
+  image(image, main = plot)
+  dev.off()
+}
+
