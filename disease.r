@@ -1,9 +1,13 @@
+# packages ----
 library(tidyverse)
 library(stats)
 library(Cairo)
 
 
-# read diseased carrot locations
+
+# read data ----
+
+# diseased carrot locations
 carrots =
   read_csv("data/carrot locs wtm.csv") %>%
   filter(AY == 1) %>%
@@ -20,8 +24,6 @@ ay =
   read_csv("data/incidence.csv") %>%
   mutate_if(is.character, as.factor)
 
-
-
 # plot carrot locations
 ay.pts =
   carrots %>%
@@ -36,6 +38,8 @@ ay.pts
 ggsave("ay pts.png", ay.pts)
 
 
+
+# disease incidence ----
 
 # mean AY incidence by density and plot location
 ay.summary =
@@ -66,7 +70,6 @@ ay.barplot =
 ay.barplot
 ggsave("ay barplot.png", ay.barplot)
 
-
 # disease incidence over time, line plot
 ay.lineplot =
   ay.summary %>%
@@ -86,7 +89,7 @@ ggsave("ay lineplot.png", ay.lineplot)
 
 
 
-# subgroups ----
+# subgroup plots ----
 
 subgroups = read_csv("data/subgroups.csv") %>%
   mutate_if(is.character, as.factor)
@@ -116,7 +119,7 @@ grid.arrange(p + geom_area() +
 
 
 
-# effectors ----
+# effector plots ----
 
 effectors = read_csv("data/effectors.csv")
 
@@ -125,25 +128,37 @@ eff_long = effectors %>%
   gather(Effector, Reads, SAP05:SAP68) %>%
   mutate(CopyNumber = Reads / R16)
 
-# bar plot overall
 eff_long %>%
+  group_by(Subgroup, Effector) %>%
+  summarise(n = n(), MeanCopyNumber = mean(CopyNumber))
+
+
+
+# bar plot overall
+p = eff_long %>%
+  filter(Subgroup != "1A1B") %>%
   group_by(Subgroup, Effector) %>%
   summarise(CopyNumber.mean = mean(CopyNumber),
             CopyNumber.sd = sd(CopyNumber)) %>%
+  arrange(CopyNumber.mean) %>%
   ggplot(aes(x = Effector,
              y = CopyNumber.mean,
              fill = Subgroup)) +
-  geom_bar(stat = "identity", position = "stack") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p + geom_bar(stat = "identity", position = "dodge") +
   labs(title = "Effector abundance by subgroup",
        y = "Number of copies per R16 read",
-       x = "Collection date")
+       x = "Effector")
 
-eff_long %>% left_join(subgroup_count)
+p + geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Effector balance by subgroup",
+       y = "Ratio of 1A:1B effector copy number",
+       x = "Effector")
 
 
 
-# bar plot by date
+# set up bar plot by date
 p = eff_long %>%
   filter(Subgroup != "1A1B") %>%
   group_by(Date, Subgroup, Effector) %>%
@@ -155,11 +170,13 @@ p = eff_long %>%
              y = CopyNumber.mean,
              fill = Subgroup)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 p + geom_col(position = "stack") +
   facet_wrap(~Effector, scales = "free_y") +
   labs(title = "Effector abundance by subgroup",
        x = "Collection date",
        y = "Number of copies per R16 read")
+
 p + geom_col(position = "fill") +
   facet_wrap(~Effector) +
   labs(title = "Effector balance by subgroup",
@@ -167,19 +184,28 @@ p + geom_col(position = "fill") +
        y = "Ratio of 1A:1B copy number")
 
 
-
-eff_long %>%
-  group_by(Date, Subgroup, Effector) %>%
-  summarise(CopyNumber.mean = mean(CopyNumber),
-            CopyNumber.sd = sd(CopyNumber)) %>%
-  ggplot(aes(x = Date,
-             y = CopyNumber.mean,
-             fill = Subgroup)) +
-  geom_area() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  facet_wrap(~Effector, scales = "free_y")
-
-
+# effector analysis ----
 # generate log copy number transformations
+eff_long %>%
+  filter(Subgroup != "1A1B") %>%
+  group_by(Effector) %>%
+  summarise(pval = chisq.test(Subgroup, Reads)$p.value)
+  
+test = eff_long %>%
+  select(SampleID, Subgroup, Effector, CopyNumber) %>%
+  filter(Subgroup != "1A1B") %>%
+  mutate(logcopy = log(CopyNumber + 1))
+
+test %>%
+  filter(Effector == "SAP15") %>%
+  chisq.test(.$logcopy, .$Subgroup, simulate.p.value = T)
+test2 = filter(test, Effector == "SAP15")
+test2 %>%
+  group_by(Subgroup) %>%
+  summarise(mean = mean(logcopy))
+
+glm(Subgroup ~ logcopy, data = test2, family = binomial(link = "logit"))
+
+
 # Logit analysis/chi2 tests and save results
 # produce summary table
