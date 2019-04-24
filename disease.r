@@ -1,7 +1,7 @@
 # packages ----
 library(tidyverse)
 library(stats)
-library(Cairo)
+library(gridExtra)
 
 
 
@@ -121,77 +121,101 @@ grid.arrange(p + geom_area() +
 
 # effector plots ----
 
-effectors = read_csv("data/effectors.csv")
+mplx2018C = read_csv("data/monsterplex_2018C.csv")
+mplx = read_csv("data/monsterplex_all.csv") %>%
+  mutate_if(is.character, as.factor)
 
-# gather SAPs
-eff_long = effectors %>%
-  gather(Effector, Reads, SAP05:SAP68) %>%
-  mutate(CopyNumber = Reads / R16)
+# reshape
+f = function(df) {
+  df %>%
+    gather(Effector, Reads, SAP05:SAP68) %>%
+    mutate(CopyNum = Reads / R16) %>%
+    mutate(LogCopyNum = log(CopyNum + 1))
+}
 
-eff_long %>%
+effdat = mplx %>%
+  filter(Year_Type == "2018_C") %>%
+  droplevels() %>%
+  f()
+
+
+# summary
+effdat %>%
   group_by(Subgroup, Effector) %>%
   summarise(n = n(), MeanCopyNumber = mean(CopyNumber))
 
 
-
-# bar plot overall
-p = eff_long %>%
+# bar plots, no date
+p = effdat %>%
   filter(Subgroup != "1A1B") %>%
   group_by(Subgroup, Effector) %>%
-  summarise(CopyNumber.mean = mean(CopyNumber),
-            CopyNumber.sd = sd(CopyNumber)) %>%
-  arrange(CopyNumber.mean) %>%
+  summarise(CopyNum.mean = mean(CopyNum),
+            CopyNum.sd = sd(CopyNum)) %>%
+  arrange(CopyNum.mean) %>%
   ggplot(aes(x = Effector,
-             y = CopyNumber.mean,
+             y = CopyNum.mean,
              fill = Subgroup)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-p + geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Effector abundance by subgroup",
+p1 = p + geom_bar(stat = "identity", position = "dodge") +
+  labs(title = paste0("Effector abundance by subgroup, data = ",
+                     levels(effdat$Year_Type), ", n = ",
+                     length(levels(effdat$SampleID))),
        y = "Number of copies per R16 read",
        x = "Effector")
 
-p + geom_bar(stat = "identity", position = "fill") +
-  labs(title = "Effector balance by subgroup",
-       y = "Ratio of 1A:1B effector copy number",
+p2 = p + geom_bar(stat = "identity", position = "fill") +
+  geom_hline(yintercept = 0.5, linetype = 2) +
+  labs(title = "Relative effector frequency",
+       y = "Copy number ratio",
        x = "Effector")
 
+grid.arrange(p1, p2)
+grid.arrange(p1, p3, p2, p4)
 
 
 # set up bar plot by date
-p = eff_long %>%
+p = effdat %>%
   filter(Subgroup != "1A1B") %>%
   group_by(Date, Subgroup, Effector) %>%
-  summarise(CopyNumber.mean = mean(CopyNumber),
-            CopyNumber.sd = sd(CopyNumber)) %>%
+  summarise(CopyNum.mean = mean(CopyNum),
+            CopyNum.sd = sd(CopyNum)) %>%
   ggplot(aes(x = factor(Date,
                         labels = unique(format(Date, "%b %d")),
                         ordered = T),
-             y = CopyNumber.mean,
+             y = CopyNum.mean,
              fill = Subgroup)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 p + geom_col(position = "stack") +
-  facet_wrap(~Effector, scales = "free_y") +
-  labs(title = "Effector abundance by subgroup",
+  facet_wrap(~Effector) +
+  labs(title = "Effector abundance by subgroup and date",
        x = "Collection date",
        y = "Number of copies per R16 read")
 
 p + geom_col(position = "fill") +
   facet_wrap(~Effector) +
-  labs(title = "Effector balance by subgroup",
+  labs(title = "Effector balance by subgroup and date",
        x = "Collection date",
        y = "Ratio of 1A:1B copy number")
 
 
+
+
+
+
+
+
+
+
 # effector analysis ----
 # generate log copy number transformations
-eff_long %>%
+effdat %>%
   filter(Subgroup != "1A1B") %>%
   group_by(Effector) %>%
   summarise(pval = chisq.test(Subgroup, Reads)$p.value)
   
-test = eff_long %>%
+test = effdat %>%
   select(SampleID, Subgroup, Effector, CopyNumber) %>%
   filter(Subgroup != "1A1B") %>%
   mutate(logcopy = log(CopyNumber + 1))
