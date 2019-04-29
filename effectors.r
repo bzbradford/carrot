@@ -91,6 +91,19 @@ p + geom_col(position = "fill") +
 
 # effector analysis ----
 
+# # sap analysis test code
+# test = effdat %>%
+#   filter(Effector == "SAP54") %>%
+#   droplevels()
+# str(test)
+# test.fit = test %>%
+#   glm(Subgroup ~ LogCopyNum,
+#       data = .,
+#       family = binomial(link = "logit"))
+# test.fit
+# test.anova = anova(test.fit, test = "Chisq")
+# test.anova
+
 saptest = function(df) {
   df = mutate_if(df, is.character, as.factor)
   fit = glm(Subgroup ~ LogCopyNum,
@@ -124,4 +137,8 @@ effdat.pvals = effdat %>%
   do(saptest(.))
 
 # output summary table
-left_join(effdat.means, effdat.pvals)
+eff.out = left_join(effdat.means, effdat.pvals)
+eff.out
+write.csv(eff.out, "eff_out.csv")
+
+
